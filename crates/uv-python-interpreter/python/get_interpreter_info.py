@@ -37,16 +37,22 @@ if sys.version_info[0] < 3:
 
 if hasattr(sys, "implementation"):
     implementation_name = sys.implementation.name
-    if implementation_name == "graalpy":
-        # GraalPy reports the CPython version as sys.implementation.version,
-        # so we need to discover the GraalPy version from the cache_tag
+    implementation_version = format_full_version(sys.implementation.version)
+    if (
+        implementation_name == "graalpy"
+        and sys.implementation.version == sys.version_info
+    ):
+        # Older GraalPy versions report the CPython version as sys.implementation.version,
+        # so use the GraalPy version from the cache_tag when available. The oldest
+        # cache tags (e.g., graalpy-38) only contain the Python language version.
         import re
 
-        implementation_version = re.sub(
-            r"graalpy(\d)(\d+)(?:dev[\da-f]+)?-\d+",
-            r"\1.\2",
+        version_match = re.fullmatch(
+            r"graalpy(\d+)(\d)(?:dev[\da-f]+)?-\d+",
             sys.implementation.cache_tag,
         )
+        if version_match:
+            implementation_version = f"{version_match[1]}.{version_match[2]}"
     elif implementation_name == "pyston":
         # Pyston reports the CPython version as sys.implementation.version,
         # so we need to discover the Pyston version from the cache_tag
@@ -57,8 +63,6 @@ if hasattr(sys, "implementation"):
             r"\1.\2",
             sys.implementation.cache_tag,
         )
-    else:
-        implementation_version = format_full_version(sys.implementation.version)
 else:
     implementation_version = "0"
     implementation_name = ""
