@@ -89,12 +89,22 @@ pub enum Error {
 
 /// Compare two build version strings.
 ///
-/// Build versions are typically YYYYMMDD date strings. Comparison is done numerically
-/// if both values parse as integers, otherwise falls back to lexicographic comparison.
+/// Build versions are typically YYYYMMDD date strings or dotted implementation versions.
+/// Compare numeric components when both builds contain only integers separated by dots,
+/// otherwise fall back to lexicographic comparison.
 pub fn compare_build_versions(a: &str, b: &str) -> Ordering {
-    match (a.parse::<u64>(), b.parse::<u64>()) {
-        (Ok(a_num), Ok(b_num)) => a_num.cmp(&b_num),
-        _ => a.cmp(b),
+    let a_parts = a
+        .split('.')
+        .map(str::parse::<u64>)
+        .collect::<Result<Vec<_>, _>>();
+    let b_parts = b
+        .split('.')
+        .map(str::parse::<u64>)
+        .collect::<Result<Vec<_>, _>>();
+    if let (Ok(a_parts), Ok(b_parts)) = (a_parts, b_parts) {
+        a_parts.cmp(&b_parts)
+    } else {
+        a.cmp(b)
     }
 }
 
@@ -1382,6 +1392,78 @@ mod tests {
         assert!(newer_build.is_upgrade_of(&older_build));
         // Older build version should not be an upgrade
         assert!(!older_build.is_upgrade_of(&newer_build));
+    }
+
+    /// GraalPy build versions can have more than three numeric components.
+    #[test]
+    fn test_is_upgrade_of_graalpy_build_version() {
+        let older_build = create_test_installation(
+            ImplementationName::GraalPy,
+            3,
+            12,
+            0,
+            None,
+            PythonVariant::Default,
+            Some("25.0.0.9"),
+        );
+        let newer_build = create_test_installation(
+            ImplementationName::GraalPy,
+            3,
+            12,
+            0,
+            None,
+            PythonVariant::Default,
+            Some("25.0.0.10"),
+        );
+
+        assert!(newer_build.is_upgrade_of(&older_build));
+        assert!(!older_build.is_upgrade_of(&newer_build));
+        assert!(!newer_build.is_upgrade_of(&newer_build));
+    }
+
+    #[test]
+    fn test_is_upgrade_of_pypy_build_version() {
+        let older_build = create_test_installation(
+            ImplementationName::PyPy,
+            3,
+            10,
+            14,
+            None,
+            PythonVariant::Default,
+            Some("7.3.9"),
+        );
+        let newer_build = create_test_installation(
+            ImplementationName::PyPy,
+            3,
+            10,
+            14,
+            None,
+            PythonVariant::Default,
+            Some("7.3.10"),
+        );
+
+        assert!(newer_build.is_upgrade_of(&older_build));
+        assert!(!older_build.is_upgrade_of(&newer_build));
+        assert!(!newer_build.is_upgrade_of(&newer_build));
+    }
+
+    #[test]
+    fn test_compare_build_versions() {
+        assert_eq!(compare_build_versions("9", "10"), Ordering::Less);
+        assert_eq!(compare_build_versions("0010", "10"), Ordering::Equal);
+        assert_eq!(compare_build_versions("25.0.0", "25.0.0.1"), Ordering::Less);
+        assert_eq!(
+            compare_build_versions("25.0.0.1.2", "25.0.0.1.1"),
+            Ordering::Greater
+        );
+        assert_eq!(
+            compare_build_versions("build-9", "build-10"),
+            Ordering::Greater
+        );
+        assert_eq!(
+            compare_build_versions("1.2.3a", "1.10.0"),
+            Ordering::Greater
+        );
     }
 
     #[test]
