@@ -633,7 +633,7 @@ class GraalPyFinder(Finder):
         "aarch64": "aarch64",
     }
 
-    GRAALPY_VERSION_RE = re.compile(r"-(\d+\.\d+\.\d+)$", re.ASCII)
+    GRAALPY_VERSION_RE = re.compile(r"-(\d+(?:\.\d+)+)$", re.ASCII)
     CPY_VERSION_RE = re.compile(r"Python (\d+\.\d+(\.\d+)?)", re.ASCII)
     GRAALPY_ASSET_VERSION_RE = re.compile(r"graalpy(\d+\.\d+(\.\d+)?)-", re.ASCII)
     PLATFORM_RE = re.compile(r"(\w+)-(\w+)\.(?:zip|tar\.gz)$", re.ASCII)
@@ -660,6 +660,7 @@ class GraalPyFinder(Finder):
             if not m:
                 continue
             graalpy_version = m.group(1)
+            graalpy_version_parts = tuple(map(int, graalpy_version.split(".")))
             for asset in release["assets"]:
                 url = asset["browser_download_url"]
                 m = self.PLATFORM_RE.search(url)
@@ -697,7 +698,9 @@ class GraalPyFinder(Finder):
                 )
                 # Only keep the latest GraalPy version of each arch/platform
                 key = (python_version, arch, platform)
-                if key not in results or graalpy_version > results[key].build:
+                if key not in results or graalpy_version_parts > tuple(
+                    map(int, results[key].build.split("."))
+                ):
                     results[key] = download
 
         return list(results.values())
